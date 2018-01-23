@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.seeker.seeker.MainActivity">
+
+    <ToggleButton
+        android:id="@+id/scanner_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ToggleButton"
+        tools:layout_editor_absoluteX="148dp"
+        tools:layout_editor_absoluteY="79dp"
+        android:layout_marginEnd="29dp"
+        android:layout_alignBottom="@+id/sample_rate"
+        android:layout_alignParentEnd="true" />
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="21dp"
+        android:text="Scanner Rate"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        tools:layout_editor_absoluteX="152dp"
+        tools:layout_editor_absoluteY="45dp"
+        android:layout_marginEnd="15dp"
+        android:layout_alignParentTop="true"
+        android:layout_toStartOf="@+id/sample_rate"
+        />
+
+    <EditText
+        android:id="@+id/sample_rate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ems="2"
+        android:inputType="number"
+        android:text="4"
+        android:layout_alignBaseline="@+id/textView"
+        android:layout_alignBottom="@+id/textView"
+        android:layout_centerHorizontal="true"
+        android:enabled="false" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_below="@+id/scanner_toggle"
+        android:layout_alignParentStart="true">
+
+        <com.jjoe64.graphview.GraphView
+            android:id="@+id/acc_graph"
+            android:layout_width="match_parent"
+            android:layout_height="240dip" />
+
+        <com.jjoe64.graphview.GraphView
+            android:id="@+id/gyro_graph"
+            android:layout_width="match_parent"
+            android:layout_height="240dip" />
+
+        <ToggleButton
+            android:id="@+id/bad"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BAD"
+            android:textColor="@android:color/holo_red_light"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</RelativeLayout>
