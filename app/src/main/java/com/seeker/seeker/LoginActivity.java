@@ -1,6 +1,8 @@
 package com.seeker.seeker;
 
+import android.accounts.Account;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.nfc.Tag;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
@@ -48,9 +50,13 @@ public class LoginActivity extends AppCompatActivity {
                 public void onClick(View view) {
                     String email = mTextEmail.getText().toString();
                     String pwd = mTextPwd.getText().toString();
-                    Toast.makeText(LoginActivity.this, "Sign In clicked"+ email +"   "+ pwd, Toast.LENGTH_SHORT).show();
+                    final Account account = new Account(email, ACCOUNT_SERVICE);
+                    String uname = email.split("@")[0];
+                    Toast.makeText(LoginActivity.this, "Sign In clicked uname:"+ uname, Toast.LENGTH_SHORT).show();
                     Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
+                    mainIntent.putExtra("username",uname);
                     startActivity(mainIntent);
+
                 }
             });
         }

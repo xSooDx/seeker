@@ -1,6 +1,7 @@
 package com.seeker.seeker;
 
 import android.Manifest;
+import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -16,7 +17,9 @@ import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Handler;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.media.session.MediaButtonReceiver;
 import android.support.v7.app.AppCompatActivity;
@@ -29,6 +32,12 @@ import android.widget.EditText;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.series.BarGraphSeries;
 import com.jjoe64.graphview.series.DataPoint;
@@ -37,7 +46,9 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener{
@@ -45,6 +56,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private final String PREFS= "SEEKER_SETTINGS";
     private final String RUNN= "RunN";
 
+    private StorageReference mStorageRef;
+    private ArrayList<String> filesToUpload = new ArrayList<String>();
+    private Iterator<String> UploadIterator;
     STimer timer;
 
     SharedPreferences settings;
@@ -90,6 +104,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         settings = getSharedPreferences(PREFS, 0);
+        mStorageRef = FirebaseStorage.getInstance().getReference();
         prefEditor = settings.edit();
         if(!settings.contains(RUNN)){
             prefEditor.putLong(RUNN,0);
@@ -191,6 +206,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
 
         mTb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if( isChecked){
@@ -207,10 +223,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     gyroZ.resetData(new DataPoint[0]);
                     long n =settings.getLong(RUNN,0);
                     b.append("r").append(n).append(".dat");
-                    String fname=b.toString();
+                    String currFname = b.toString();
+                    filesToUpload.add(currFname);
                     try {
-                        File f = new File(getExternalFilesDir(null),fname);
+                        File f = new File(getExternalFilesDir(null),currFname);
+                        //filesToUpload.add(f.getAbsolutePath());
+                        Log.d("ADD", "onCheckedChanged: addded "+f.getAbsolutePath());
                         fo = new FileOutputStream(f);
+
                         if(f.exists()){Log.i("e","e");} else {Log.i("ne","ne");}
                         Log.i("FP",f.getAbsolutePath());
                         sampleTask = new SampleTask(fo);
@@ -234,13 +254,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     timer.stop();
                     try {
-
                         fo.close();
                         fo=null;
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-
+                    startUpload();
                 }
             }
         });
@@ -261,6 +280,57 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
         locationManager.requestLocationUpdates(provider, 400, 1, this);    }
 
+    public void startUpload(){
+        Log.d("UP", "startUpload: UPLOADING ALL");
+        Intent intent = getIntent();
+        String uname = intent.getExtras().getString("username");
+        Log.d("hi", "startUpload: Username:" + uname);
+        UploadIterator = filesToUpload.iterator();
+        try {
+            while (UploadIterator.hasNext()) {
+                String path = UploadIterator.next();
+                Log.d("PATH", "startUpload: @"+path);
+                File f = new File(getExternalFilesDir(null)+"/"+path);
+                Toast.makeText(this, f.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+                Uri file = Uri.fromFile(f);
+                final ProgressDialog progressDialog = new ProgressDialog(this);
+                Log.d("UP", "startUpload: uploading: "+path);
+                progressDialog.setTitle("Uploading...");
+                progressDialog.show();
+                StorageReference mRef = mStorageRef.child("traces/" + uname + "/" + path);
+                UploadTask uploadTask = mRef.putFile(file);
+                uploadTask.addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                    @Override
+                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                        // Get a URL to the uploaded content
+                        Log.d("good", "onSuccess: Upload successfull");
+                        Toast.makeText(MainActivity.this, "Upload Succesfull", Toast.LENGTH_SHORT).show();
+                        UploadIterator.remove();
+                        progressDialog.hide();
+                    }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception exception) {
+                            exception.printStackTrace();
+                            Log.d("bad", "onFailure: failed");
+                            Toast.makeText(MainActivity.this, "Upload failed", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
+                            double progress = (taskSnapshot.getBytesTransferred() * 100.0) / taskSnapshot.getTotalByteCount();
+                            progressDialog.setMessage((int) progress + "% uploaded..");
+                        }
+                    });
+            }
+        }
+        catch (Exception e){
+            Log.d("up", "startUpload: couldn't open file");
+            e.printStackTrace();
+        }
+    }
     @Override
     protected void onPause() {
         super.onPause();
@@ -281,6 +351,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
     }
+
+
 
     @Override
     public void onLocationChanged(Location location) {
