@@ -17,6 +17,8 @@ import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Handler;
 import android.support.annotation.NonNull;
@@ -26,7 +28,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -34,6 +38,8 @@ import android.widget.ToggleButton;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.OnProgressListener;
 import com.google.firebase.storage.StorageReference;
@@ -46,9 +52,13 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.Calendar;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener{
@@ -57,8 +67,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private final String RUNN= "RunN";
 
     private StorageReference mStorageRef;
-    private ArrayList<String> filesToUpload = new ArrayList<String>();
+    private ArrayList<String> filesToUpload;
     private Iterator<String> UploadIterator;
+    private Boolean upCompleted;
+    private Button mBtnLogout;
     STimer timer;
 
     SharedPreferences settings;
@@ -105,6 +117,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onCreate(Bundle savedInstanceState) {
         settings = getSharedPreferences(PREFS, 0);
         mStorageRef = FirebaseStorage.getInstance().getReference();
+        filesToUpload = new ArrayList<>();
         prefEditor = settings.edit();
         if(!settings.contains(RUNN)){
             prefEditor.putLong(RUNN,0);
@@ -181,6 +194,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mTb = (ToggleButton) findViewById(R.id.scanner_toggle);
         mSRate = (EditText) findViewById(R.id.sample_rate);
         mBad = (ToggleButton) findViewById(R.id.bad);
+        mBtnLogout = (Button) findViewById(R.id.logout);
         mBad.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -200,10 +214,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Criteria criteria = new Criteria();
         provider = locationManager.getBestProvider(criteria, false);
-        Location location = locationManager.getLastKnownLocation(provider);
-        if (location != null) {
-            onLocationChanged(location);
+        Location location;
+        try{
+            location = locationManager.getLastKnownLocation(provider);
+            if (location != null) {
+                onLocationChanged(location);
+            }
         }
+        catch (Exception e){
+            Toast.makeText(this, "ALLOW LOCATION", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+
 
         mTb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 
@@ -222,13 +244,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     gyroY.resetData(new DataPoint[0]);
                     gyroZ.resetData(new DataPoint[0]);
                     long n =settings.getLong(RUNN,0);
-                    b.append("r").append(n).append(".dat");
+
+                    SimpleDateFormat formatter = new SimpleDateFormat("dd-M-yyyy-hh-mm-ss");
+                    String strDate = formatter.format(new Date());
+
+                    Log.d("GH", "onCheckedChanged: CURRENT TIME: "+ strDate);
+
+                    b.append("r").append(strDate).append(".dat");
                     String currFname = b.toString();
                     filesToUpload.add(currFname);
                     try {
                         File f = new File(getExternalFilesDir(null),currFname);
                         //filesToUpload.add(f.getAbsolutePath());
-                        Log.d("ADD", "onCheckedChanged: addded "+f.getAbsolutePath());
+                        Log.d("ADD", "onCheckedChanged: started "+f.getAbsolutePath());
+                        Log.d("", "onCheckedChanged: ------------------------------------------");
+                        Log.d("LIST", "filesToUpload:"+filesToUpload);
+                        Log.d("", "onCheckedChanged: ------------------------------------------");
                         fo = new FileOutputStream(f);
 
                         if(f.exists()){Log.i("e","e");} else {Log.i("ne","ne");}
@@ -263,6 +294,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
             }
         });
+
+        mBtnLogout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                FirebaseAuth.getInstance().signOut();
+                Intent loginIntent = new Intent(MainActivity.this, LoginActivity.class);
+                startActivity(loginIntent);
+                finish();
+            }
+        });
     }
 
     @Override
@@ -278,57 +319,120 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        locationManager.requestLocationUpdates(provider, 400, 1, this);    }
-
-    public void startUpload(){
-        Log.d("UP", "startUpload: UPLOADING ALL");
-        Intent intent = getIntent();
-        String uname = intent.getExtras().getString("username");
-        Log.d("hi", "startUpload: Username:" + uname);
-        UploadIterator = filesToUpload.iterator();
-        try {
-            while (UploadIterator.hasNext()) {
-                String path = UploadIterator.next();
-                Log.d("PATH", "startUpload: @"+path);
-                File f = new File(getExternalFilesDir(null)+"/"+path);
-                Toast.makeText(this, f.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-                Uri file = Uri.fromFile(f);
-                final ProgressDialog progressDialog = new ProgressDialog(this);
-                Log.d("UP", "startUpload: uploading: "+path);
-                progressDialog.setTitle("Uploading...");
-                progressDialog.show();
-                StorageReference mRef = mStorageRef.child("traces/" + uname + "/" + path);
-                UploadTask uploadTask = mRef.putFile(file);
-                uploadTask.addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                        // Get a URL to the uploaded content
-                        Log.d("good", "onSuccess: Upload successfull");
-                        Toast.makeText(MainActivity.this, "Upload Succesfull", Toast.LENGTH_SHORT).show();
-                        UploadIterator.remove();
-                        progressDialog.hide();
-                    }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception exception) {
-                            exception.printStackTrace();
-                            Log.d("bad", "onFailure: failed");
-                            Toast.makeText(MainActivity.this, "Upload failed", Toast.LENGTH_SHORT).show();
-                        }
-                    })
-                    .addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
-                        @Override
-                        public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
-                            double progress = (taskSnapshot.getBytesTransferred() * 100.0) / taskSnapshot.getTotalByteCount();
-                            progressDialog.setMessage((int) progress + "% uploaded..");
-                        }
-                    });
-            }
+        try{
+            locationManager.requestLocationUpdates(provider, 400, 1, this);
         }
         catch (Exception e){
-            Log.d("up", "startUpload: couldn't open file");
             e.printStackTrace();
+        }
+    }
+
+
+    //TODO: startUpload must be async
+    public void startUpload(){
+
+        ConnectivityManager cm;
+        NetworkInfo info = null;
+        try
+        {
+            cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            info = cm.getActiveNetworkInfo();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        if (info != null)
+        {
+            Log.d("NW", "startUpload: network connected");
+            Log.d("UP", "startUpload: starting upload");
+
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            if (user != null) {
+                String uname = user.getEmail().split("@")[0];
+                Log.d("hi", "startUpload: Username:" + uname);
+                UploadIterator = filesToUpload.iterator();
+                do{
+                    upCompleted = false;
+                    try {
+                        String path = UploadIterator.next();
+                        Log.d("PATH", "startUpload: @" + path);
+                        File f = new File(getExternalFilesDir(null) + "/" + path);
+                       // Toast.makeText(this, uname, Toast.LENGTH_SHORT).show();
+                       // Toast.makeText(this, f.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+                        Uri file = Uri.fromFile(f);
+                        final ProgressDialog progressDialog = new ProgressDialog(this);
+                        Log.d("UP", "startUpload: uploading: " + path);
+                        progressDialog.setTitle("Uploading...");
+                        progressDialog.show();
+                        StorageReference mRef = mStorageRef.child("traces/" + uname + "/" + path);
+                        final UploadTask uploadTask = mRef.putFile(file);
+                        uploadTask
+                                .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                                    @Override
+                                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                                        // Get a URL to the uploaded content
+                                        Log.d("good", "onSuccess: Upload successful");
+                                        Toast.makeText(MainActivity.this, "Upload Succesful", Toast.LENGTH_SHORT).show();
+                                        UploadIterator.remove();
+                                        progressDialog.hide();
+                                    }
+                                })
+                                .addOnFailureListener(new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception exception) {
+                                        exception.printStackTrace();
+                                        Log.d("bad", "onFailure: failed");
+                                        Toast.makeText(MainActivity.this, "Upload failed", Toast.LENGTH_SHORT).show();
+                                        progressDialog.hide();
+                                    }
+                                })
+                                .addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                                   @Override
+                                   public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
+                                       ConnectivityManager cm1;
+                                       NetworkInfo info1 = null;
+                                       try
+                                       {
+                                           cm1 = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                                           info1 = cm1.getActiveNetworkInfo();
+                                       }
+                                       catch (Exception e)
+                                       {
+                                           e.printStackTrace();
+                                       }
+
+                                       if (info1 == null)
+                                       {
+                                           uploadTask.cancel();
+                                           Toast.makeText(MainActivity.this, "Upload cancelled due to connectivity ", Toast.LENGTH_SHORT).show();
+                                       }
+                                   }
+                                });
+
+                        //TODO: FIX UPLOAD TASK
+                        if(uploadTask.isComplete())
+                        {
+                            upCompleted =true;
+                        }
+
+                    }
+                    catch (Exception e) {
+                        Log.d("up", "startUpload: couldn't open file");
+                        e.printStackTrace();
+                    }
+                    Boolean f = UploadIterator.hasNext() && upCompleted;
+                    Log.d("", "hasNext?: "+f.toString());
+
+                }while ( UploadIterator.hasNext() && upCompleted);
+            }
+            else{
+                Toast.makeText(this, "Error with user", Toast.LENGTH_SHORT).show();
+            }
+        }
+        else
+        {
+            Toast.makeText(this, "Network unavailable, will try uploading later..", Toast.LENGTH_SHORT).show();
         }
     }
     @Override
