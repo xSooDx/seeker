@@ -1,74 +1,129 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.seeker.seeker.MainActivity">
+    tools:context="com.seeker.seeker.MainActivity"
+    tools:layout_editor_absoluteY="25dp">
 
-    <ToggleButton
-        android:id="@+id/scanner_toggle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="ToggleButton"
-        tools:layout_editor_absoluteX="148dp"
-        tools:layout_editor_absoluteY="79dp"
-        android:layout_marginEnd="29dp"
-        android:layout_alignBottom="@+id/sample_rate"
-        android:layout_alignParentEnd="true" />
+    <RelativeLayout
+        android:id="@+id/topPanel"
+        android:layout_width="0dp"
+        android:layout_height="263dp"
+        android:layout_marginBottom="32dp"
+        android:layout_marginTop="1dp"
+        app:layout_constraintBottom_toTopOf="@+id/acc_graph"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="spread_inside">
 
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="21dp"
-        android:text="Scanner Rate"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large"
-        tools:layout_editor_absoluteX="152dp"
-        tools:layout_editor_absoluteY="45dp"
-        android:layout_marginEnd="15dp"
-        android:layout_alignParentTop="true"
-        android:layout_toStartOf="@+id/sample_rate"
-        />
+        <ToggleButton
+            android:id="@+id/scanner_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="15dp"
+            android:layout_toStartOf="@+id/logout"
+            android:text="ToggleButton"
+            android:textColor="@android:color/holo_red_light"
+            android:textSize="18sp"
+            tools:layout_editor_absoluteX="148dp"
+            tools:layout_editor_absoluteY="79dp" />
 
-    <EditText
-        android:id="@+id/sample_rate"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:ems="2"
-        android:inputType="number"
-        android:text="4"
-        android:layout_alignBaseline="@+id/textView"
-        android:layout_alignBottom="@+id/textView"
-        android:layout_centerHorizontal="true"
-        android:enabled="false" />
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBaseline="@+id/sample_rate"
+            android:layout_alignBottom="@+id/sample_rate"
+            android:layout_alignParentStart="true"
+            android:layout_marginStart="32dp"
+            android:text="Scanner Rate"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:layout_below="@+id/scanner_toggle"
-        android:layout_alignParentStart="true">
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@+id/scanner_toggle"
+            android:layout_alignStart="@+id/textView"
+            android:text="Capture:"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
-        <com.jjoe64.graphview.GraphView
-            android:id="@+id/acc_graph"
-            android:layout_width="match_parent"
-            android:layout_height="240dip" />
 
-        <com.jjoe64.graphview.GraphView
-            android:id="@+id/gyro_graph"
-            android:layout_width="match_parent"
-            android:layout_height="240dip" />
+        <EditText
+            android:id="@+id/sample_rate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/scanner_toggle"
+            android:layout_alignStart="@+id/scanner_toggle"
+            android:layout_marginBottom="12dp"
+            android:layout_marginStart="19dp"
+            android:ems="2"
+            android:enabled="false"
+            android:inputType="number"
+            android:text="4" />
+
+        <TextView
+            android:id="@+id/textView3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBaseline="@+id/bad"
+            android:layout_alignBottom="@+id/bad"
+            android:layout_alignStart="@+id/status"
+            android:text="Visuals:"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
         <ToggleButton
             android:id="@+id/bad"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_alignStart="@+id/scanner_toggle"
+            android:layout_below="@+id/scanner_toggle"
+            android:layout_marginTop="12dp"
             android:text="BAD"
             android:textColor="@android:color/holo_red_light"
-            android:textSize="24sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
-    </LinearLayout>
+        <Button
+            android:id="@+id/logout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_alignTop="@+id/sample_rate"
+            android:layout_marginEnd="14dp"
+            android:text="Logout" />
 
-</RelativeLayout>
+    </RelativeLayout>
+
+
+    <com.jjoe64.graphview.GraphView
+        android:id="@+id/acc_graph"
+        android:layout_width="0dp"
+        android:layout_height="145dp"
+        android:layout_above="@+id/gyro_graph"
+        android:layout_alignParentStart="true"
+        android:layout_marginBottom="15dp"
+        app:layout_constraintBottom_toTopOf="@+id/gyro_graph"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/topPanel" />
+
+    <com.jjoe64.graphview.GraphView
+        android:id="@+id/gyro_graph"
+        android:layout_width="0dp"
+        android:layout_height="147dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginBottom="30dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/acc_graph" />
+
+</android.support.constraint.ConstraintLayout>
