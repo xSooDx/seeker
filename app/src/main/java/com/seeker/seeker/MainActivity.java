@@ -49,6 +49,10 @@ import com.jjoe64.graphview.series.BarGraphSeries;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -64,6 +68,7 @@ import java.util.Calendar;
 public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener{
 
     private final String PREFS= "SEEKER_SETTINGS";
+    private final String PENDING= "PENDING";
     private final String RUNN= "RunN";
 
     private StorageReference mStorageRef;
@@ -71,13 +76,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Iterator<String> UploadIterator;
     private Boolean upCompleted;
     private Button mBtnLogout;
+    private Button mBtnUpload;
     STimer timer;
 
     SharedPreferences settings;
     SharedPreferences.Editor prefEditor;
 
     ToggleButton mTb;
-    ToggleButton mBad;
+//    ToggleButton mBad;
     EditText mSRate;
     SensorManager sensorManager;
     private LocationManager locationManager;
@@ -92,7 +98,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private final Object lockgp = new Object();
     int sampleRate = 4; // Times a second
     long sampleInterval;
-    boolean isBad = false;
+//    boolean isBad = false;
 
     private final Handler mHandler = new Handler();
 
@@ -193,15 +199,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         mTb = (ToggleButton) findViewById(R.id.scanner_toggle);
         mSRate = (EditText) findViewById(R.id.sample_rate);
-        mBad = (ToggleButton) findViewById(R.id.bad);
+//        mBad = (ToggleButton) findViewById(R.id.bad);
         mBtnLogout = (Button) findViewById(R.id.logout);
-        mBad.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+        mBtnUpload = (Button) findViewById(R.id.upload);
+
+        mBtnUpload.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                isBad = isChecked;
-                Log.i("ASD","ASD");
+            public void onClick(View v) {
+                startUpload();
             }
         });
+//        mBad.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+//            @Override
+//            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+//                isBad = isChecked;
+//                Log.i("ASD","ASD");
+//            }
+//        });
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED    )
@@ -232,7 +246,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if( isChecked){
-                    mBad.setEnabled(true);
+//                    mBad.setEnabled(true);
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     Log.d("TB","Checked");
                     StringBuilder b = new StringBuilder();
@@ -268,8 +282,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         sampleRate = Integer.parseInt(mSRate.getText().toString());
                         sampleInterval = 1000 / sampleRate;
                         mHandler.postDelayed(sampleTask,sampleInterval);
-
                         prefEditor.putLong(RUNN,n+1);
+                        JSONObject arr = new JSONObject(settings.getString(PENDING,"{}"));
+                        arr.put(currFname,true);
+                        prefEditor.putString(PENDING,arr.toString());
                         prefEditor.apply();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -279,8 +295,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                 }else{
                     Log.d("TB","UNChecked");
-                    mBad.setChecked(false);
-                    mBad.setEnabled(false);
+//                    mBad.setChecked(false);
+//                    mBad.setEnabled(false);
                     mHandler.removeCallbacks(sampleTask);
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     timer.stop();
@@ -328,7 +344,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
 
-    //TODO: startUpload must be async
     public void startUpload(){
 
         ConnectivityManager cm;
@@ -351,11 +366,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             if (user != null) {
                 String uname = user.getEmail().split("@")[0];
                 Log.d("hi", "startUpload: Username:" + uname);
-                UploadIterator = filesToUpload.iterator();
+
+                JSONObject arr1;
+                try{
+                    arr1 = new JSONObject(settings.getString(PENDING,"{}"));
+                }
+                catch (JSONException e){
+                    arr1 = new JSONObject();
+                }
+                final JSONObject arr = arr1;
+                UploadIterator = arr.keys();
                 do{
                     upCompleted = false;
                     try {
-                        String path = UploadIterator.next();
+                        final String path = UploadIterator.next();
                         Log.d("PATH", "startUpload: @" + path);
                         File f = new File(getExternalFilesDir(null) + "/" + path);
                        // Toast.makeText(this, uname, Toast.LENGTH_SHORT).show();
@@ -374,7 +398,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                         // Get a URL to the uploaded content
                                         Log.d("good", "onSuccess: Upload successful");
                                         Toast.makeText(MainActivity.this, "Upload Succesful", Toast.LENGTH_SHORT).show();
-                                        UploadIterator.remove();
+                                        arr.remove(path);
+                                        prefEditor.putString(PENDING,arr.toString());
+                                        prefEditor.apply();
                                         progressDialog.hide();
                                     }
                                 })
@@ -415,16 +441,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         {
                             upCompleted =true;
                         }
-
                     }
                     catch (Exception e) {
                         Log.d("up", "startUpload: couldn't open file");
                         e.printStackTrace();
                     }
-                    Boolean f = UploadIterator.hasNext() && upCompleted;
+                    Boolean f = UploadIterator.hasNext();
                     Log.d("", "hasNext?: "+f.toString());
 
-                }while ( UploadIterator.hasNext() && upCompleted);
+                }while ( UploadIterator.hasNext());
             }
             else{
                 Toast.makeText(this, "Error with user", Toast.LENGTH_SHORT).show();
@@ -538,14 +563,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             gyroY.appendData(gy,true,MAX_DP);
             gyroZ.appendData(gz,true,MAX_DP);
 
-            if(isBad){
-                sb.append("BAD");
-                GB.appendData(new DataPoint(time,10.0),true, MAX_DP);
-
-            }else{
-                sb.append("GOOD");
-                GB.appendData(new DataPoint(time,0.0),true, MAX_DP);
-            }
+//            if(isBad){
+//                sb.append("BAD");
+//                GB.appendData(new DataPoint(time,10.0),true, MAX_DP);
+//
+//            }else{
+//                sb.append("GOOD");
+//
+//            }
+            GB.appendData(new DataPoint(time,0.0),true, MAX_DP);
             sb.append(" \n");
 
 
@@ -573,10 +599,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     return;
                 }
 
-                if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                    isBad = ! isBad;
-                    mBad.setChecked(isBad);
-                }
+//                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+//                    isBad = ! isBad;
+//                    mBad.setChecked(isBad);
+//                }
             }
         }
     }
