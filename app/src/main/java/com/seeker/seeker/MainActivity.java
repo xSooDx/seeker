@@ -13,6 +13,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.app.Service;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
@@ -20,7 +21,9 @@ import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.os.Environment;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.media.session.MediaButtonReceiver;
@@ -77,6 +80,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Boolean upCompleted;
     private Button mBtnLogout;
     private Button mBtnUpload;
+    private PowerManager.WakeLock mWakeLock = null;
+    private PowerManager powerManager;
+    private LocationListener mLocationListener;
+    private boolean compromised = false;
+
     STimer timer;
 
     SharedPreferences settings;
@@ -122,6 +130,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         settings = getSharedPreferences(PREFS, 0);
+        acquireWakeLock();
         mStorageRef = FirebaseStorage.getInstance().getReference();
         filesToUpload = new ArrayList<>();
         prefEditor = settings.edit();
@@ -133,6 +142,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
         timer = new STimer();
 
+
+
+//---------------------------------------------------------------------GRAPH RELATED STUFF START
         final int LINE_T = 2;
         accGraph = (GraphView)findViewById(R.id.acc_graph);
         gyroGraph = (GraphView)findViewById(R.id.gyro_graph);
@@ -199,35 +211,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         mTb = (ToggleButton) findViewById(R.id.scanner_toggle);
         mSRate = (EditText) findViewById(R.id.sample_rate);
-//        mBad = (ToggleButton) findViewById(R.id.bad);
+
+//---------------------------------------------------------------------GRAPH RELATED STUFF END
+
+
+//---------------------------------------------------------------------------LOCATION CODE START
         mBtnLogout = (Button) findViewById(R.id.logout);
         mBtnUpload = (Button) findViewById(R.id.upload);
-
         mBtnUpload.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startUpload();
+                startUpload(true);
             }
         });
-//        mBad.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
-//            @Override
-//            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-//                isBad = isChecked;
-//                Log.i("ASD","ASD");
-//            }
-//        });
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED    )
         {
             ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION},0);
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION},0);
         }
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Criteria criteria = new Criteria();
         provider = locationManager.getBestProvider(criteria, false);
+       // provider = LocationManager.GPS_PROVIDER;
+
+
         Location location;
         try{
             location = locationManager.getLastKnownLocation(provider);
@@ -240,9 +251,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             e.printStackTrace();
         }
 
-
+//----------------------------------------------------------------------------------LOCATION CODE END
         mTb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if( isChecked){
@@ -259,25 +269,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     gyroZ.resetData(new DataPoint[0]);
                     long n =settings.getLong(RUNN,0);
 
-                    SimpleDateFormat formatter = new SimpleDateFormat("dd-M-yyyy-hh-mm-ss");
+                    SimpleDateFormat formatter = new SimpleDateFormat("dd-M-yyyy-HH-mm-ss");
                     String strDate = formatter.format(new Date());
 
                     Log.d("GH", "onCheckedChanged: CURRENT TIME: "+ strDate);
 
                     b.append("r").append(strDate).append(".dat");
                     String currFname = b.toString();
-                    filesToUpload.add(currFname);
+                    startLog(currFname);
+                    filesToUpload.add(strDate);
                     try {
                         File f = new File(getExternalFilesDir(null),currFname);
                         //filesToUpload.add(f.getAbsolutePath());
                         Log.d("ADD", "onCheckedChanged: started "+f.getAbsolutePath());
-                        Log.d("", "onCheckedChanged: ------------------------------------------");
                         Log.d("LIST", "filesToUpload:"+filesToUpload);
-                        Log.d("", "onCheckedChanged: ------------------------------------------");
                         fo = new FileOutputStream(f);
 
                         if(f.exists()){Log.i("e","e");} else {Log.i("ne","ne");}
                         Log.i("FP",f.getAbsolutePath());
+
                         sampleTask = new SampleTask(fo);
                         sampleRate = Integer.parseInt(mSRate.getText().toString());
                         sampleInterval = 1000 / sampleRate;
@@ -300,13 +310,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     mHandler.removeCallbacks(sampleTask);
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     timer.stop();
+                    StringBuilder lsb = new StringBuilder();
+
+                    lsb.append("compromised:");
+                    lsb.append(String.valueOf(compromised));
+                    lsb.append(" \n");
+                    Log.d("COMP", "onCheckedChanged: "+lsb.toString());
                     try {
+                        fo.write(lsb.toString().getBytes());
+                        fo.flush();
                         fo.close();
                         fo=null;
+                        stopLog();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                    startUpload();
+                    startUpload(false);
                 }
             }
         });
@@ -343,15 +362,60 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        releaseWakeLock();
+        super.onDestroy();
+    }
 
-    public void startUpload(){
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        Log.d("PAU", "onPause: paused");
+        //locationManager.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER, 400, 1, this);
+
+//        locationManager.removeUpdates(this);
+//        sensorManager.unregisterListener(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        Log.d("BAD", "onStop: APP STOPPED DUE to SLEEP (?)");
+        compromised = true;
+    }
+
+    public void startLog(String currFname) {
+        File logFile = new File( getExternalFilesDir(null), "logcat" + currFname+".txt" );
+        Log.d("LOG", "startLog: logfile made "+logFile.toString());
+        try {
+            Process process = Runtime.getRuntime().exec("logcat -c"); //clear logcat
+            process = Runtime.getRuntime().exec("logcat -f " + logFile);
+        } catch ( IOException e ) {
+            e.printStackTrace();
+        }
+    }
+
+    public void stopLog(){
+        try {
+            Process process = Runtime.getRuntime().exec("logcat -c"); //clear logcat
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void startUpload(Boolean btnClick){
 
         ConnectivityManager cm;
         NetworkInfo info = null;
         try
         {
             cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            info = cm.getActiveNetworkInfo();
+            if (cm != null) {
+                info = cm.getActiveNetworkInfo();
+            }
         }
         catch (Exception e)
         {
@@ -376,6 +440,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
                 final JSONObject arr = arr1;
                 UploadIterator = arr.keys();
+
+                Boolean more = UploadIterator.hasNext();
+                Log.d("", "hasNext?: "+more.toString());
+                if(more == false && btnClick==true){
+                    Toast.makeText(this, "Nothing left to upload now", Toast.LENGTH_SHORT).show();
+                }
                 do{
                     upCompleted = false;
                     try {
@@ -395,9 +465,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
                                     @Override
                                     public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-                                        // Get a URL to the uploaded content
                                         Log.d("good", "onSuccess: Upload successful");
-                                        Toast.makeText(MainActivity.this, "Upload Succesful", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(MainActivity.this, "Upload Successful", Toast.LENGTH_SHORT).show();
                                         arr.remove(path);
                                         prefEditor.putString(PENDING,arr.toString());
                                         prefEditor.apply();
@@ -421,7 +490,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                        try
                                        {
                                            cm1 = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-                                           info1 = cm1.getActiveNetworkInfo();
+                                           if (cm1 != null) {
+                                               info1 = cm1.getActiveNetworkInfo();
+                                           }
                                        }
                                        catch (Exception e)
                                        {
@@ -431,12 +502,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                        if (info1 == null)
                                        {
                                            uploadTask.cancel();
-                                           Toast.makeText(MainActivity.this, "Upload cancelled due to connectivity ", Toast.LENGTH_SHORT).show();
+                                           Toast.makeText(MainActivity.this, "Upload cancelled due to connectivity issues", Toast.LENGTH_SHORT).show();
                                        }
                                    }
                                 });
-
-                        //TODO: FIX UPLOAD TASK
                         if(uploadTask.isComplete())
                         {
                             upCompleted =true;
@@ -446,9 +515,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         Log.d("up", "startUpload: couldn't open file");
                         e.printStackTrace();
                     }
-                    Boolean f = UploadIterator.hasNext();
-                    Log.d("", "hasNext?: "+f.toString());
-
                 }while ( UploadIterator.hasNext());
             }
             else{
@@ -460,12 +526,29 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Toast.makeText(this, "Network unavailable, will try uploading later..", Toast.LENGTH_SHORT).show();
         }
     }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        locationManager.removeUpdates(this);
-        sensorManager.unregisterListener(this);
+
+    public void acquireWakeLock() {
+        /*
+         Trying to keep acc, gyro, location sensors active even if locked
+        */
+        powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        releaseWakeLock();
+        //Acquire new wake lock
+        if (powerManager != null) {
+            mWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PARTIAL_WAKE_LOCK");
+        }
+        mWakeLock.acquire(10);
+        Log.d("WL", "acquireWakeLock: partial wakelock acquired");
     }
+
+    public void releaseWakeLock() {
+        if (mWakeLock != null && mWakeLock.isHeld()) {
+            mWakeLock.release();
+            mWakeLock = null;
+        }
+        Log.d("WL", "releaseWakeLock: partial wakelock released");
+    }
+
 
     @Override
     public void onSensorChanged(SensorEvent event) {
@@ -489,6 +572,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             gpsSample[0] = location.getLatitude();
             gpsSample[1] = location.getLongitude();
         }
+        Log.d("LOC", "onLocationChanged: loc ch");
     }
 
     @Override
@@ -512,6 +596,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
     }
+
     private class SampleTask implements Runnable{
         FileOutputStream fos;
         String acc;
@@ -573,7 +658,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 //            }
             GB.appendData(new DataPoint(time,0.0),true, MAX_DP);
             sb.append(" \n");
-
 
             try {
                 fo.write(sb.toString().getBytes());
