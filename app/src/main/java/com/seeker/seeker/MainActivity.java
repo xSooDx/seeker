@@ -117,6 +117,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     BarGraphSeries<DataPoint> GB;
 
+    public BroadcastReceiver br = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(Intent.ACTION_SCREEN_OFF)){
+                unregisterListeners();
+                Log.e("called","Called");
+                registerListeners();
+
+            }
+        }
+    };
 
 
     @Override
@@ -320,11 +331,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 finish();
             }
         });
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        registerReceiver(br,filter);
+
+
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(br);
+
+    }
+
+    private void unregisterListeners(){
+        locationManager.removeUpdates(this);
+        sensorManager.unregisterListener(this);
+    }
+
+    private void registerListeners(){
         sensorManager.registerListener(this,
                 sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
                 SensorManager.SENSOR_DELAY_NORMAL);
@@ -332,7 +357,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
                 SensorManager.SENSOR_DELAY_NORMAL);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
         try{
@@ -341,6 +366,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         catch (Exception e){
             e.printStackTrace();
         }
+    }
+    @Override
+    protected void onResume() {
+        super.onResume();
+       registerListeners();
+
     }
 
 
@@ -463,8 +494,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onPause() {
         super.onPause();
-        locationManager.removeUpdates(this);
-        sensorManager.unregisterListener(this);
+        unregisterListeners();
     }
 
     @Override
