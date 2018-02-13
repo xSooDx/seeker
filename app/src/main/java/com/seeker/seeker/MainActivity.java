@@ -130,7 +130,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals(Intent.ACTION_SCREEN_OFF)){
                 unregisterListeners();
-                Log.e("called","Called");
                 registerListeners();
 
             }
@@ -356,13 +355,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unregisterReceiver(br);
-
-    }
-
     private void unregisterListeners(){
         locationManager.removeUpdates(this);
         sensorManager.unregisterListener(this);
@@ -396,20 +388,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onDestroy() {
         releaseWakeLock();
+        unregisterReceiver(br);
         super.onDestroy();
     }
 
+
     @Override
     protected void onPause() {
+        Log.d("PAU", "onPause: paused");
+        unregisterListeners();
+
         super.onPause();
 
-        Log.d("PAU", "onPause: paused");
         //locationManager.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER, 400, 1, this);
 
 //        locationManager.removeUpdates(this);
 //        sensorManager.unregisterListener(this);
     }
-
     @Override
     protected void onStop() {
         super.onStop();
@@ -556,11 +551,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         {
             Toast.makeText(this, "Network unavailable, will try uploading later..", Toast.LENGTH_SHORT).show();
         }
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        unregisterListeners();
     }
 
     @Override
